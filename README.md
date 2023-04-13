@@ -10,5 +10,5 @@ This repo is implementation for 3D point cloud architectures in pytorch.
 
 ## **License**
 This repo is licensed under the MIT License.
-See [LICENSE](https://github.com/boyin96/Deep-Reinforcement-Learning-Algorithms-with-PyTorch/blob/main/LICENSE) for
+See [LICENSE](https://github.com/boyin96/3D_PyTorch/blob/master/LICENSE) for
 details.
