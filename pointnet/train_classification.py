@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.utils.data
 
 from datasets import MyDataset
-from pointnet import PointNetCls
+from pointnet import PointNetCls, feature_transform_regularizer
 
 # Set parameters.
 parser = argparse.ArgumentParser()
@@ -18,6 +18,7 @@ parser.add_argument("--model_path", type=str, default="", help="model path")
 parser.add_argument("--dataset_path", type=str, default="shapenetcore_partanno_segmentation_benchmark_v0",
                     help="dataset path")
 parser.add_argument("--dataset_type", type=str, default="prediction", help="dataset type")
+parser.add_argument("--feature_transform_regular", type=bool, default=False, help="use feature transform")
 opt = parser.parse_args()
 
 # Set CPU seed.
@@ -86,8 +87,10 @@ for epoch in range(opt.num_epoch):
             points, target = points.cuda(), target.cuda()
         optimizer.zero_grad()
         classifier = classifier.train()
-        pred, _, _ = classifier(points)
+        pred, _, trans_feat = classifier(points)
         loss = F.nll_loss(pred, target)
+        if opt.feature_transform:
+            loss = loss + feature_transform_regularizer(trans_feat) * 0.001
         loss.backward()
         optimizer.step()
         pred_choice = pred.detach().max(1)[1]

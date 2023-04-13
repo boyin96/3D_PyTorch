@@ -214,13 +214,13 @@ class PointNetDenseCls(nn.Module):
         return x, trans, trans_feat
 
 
-# def feature_transform_regularizer(trans):
-#     d = trans.size()[1]
-#     I = torch.eye(d).unsqueeze(0)
-#     if trans.is_cuda:
-#         I = I.cuda()
-#     loss = torch.mean(torch.norm(torch.bmm(trans, trans.transpose(2, 1)) - I, dim=(1, 2)))
-#     return loss
+def feature_transform_regularizer(trans):
+    d = trans.size()[1]
+    I = torch.eye(d).unsqueeze(0)
+    if trans.is_cuda:
+        I = I.cuda()
+    loss = torch.mean(torch.linalg.norm(torch.bmm(trans, trans.transpose(2, 1)) - I, dim=(1, 2)))
+    return loss
 
 
 # Test point network
