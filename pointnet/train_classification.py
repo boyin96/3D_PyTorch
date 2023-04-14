@@ -26,7 +26,7 @@ opt.manualSeed = random.randint(1, 10000)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 
-# Set dataset
+# Set dataset.
 if opt.dataset_type == "prediction":
     train_dataset = MyDataset(
         root=opt.dataset_path,
@@ -46,7 +46,7 @@ else:
     train_dataset, test_dataset = None, None
     exit("Wrong dataset type!")
 
-# Set dataloader
+# Set dataloader.
 train_dataloader = torch.utils.data.DataLoader(
     train_dataset,
     batch_size=opt.batch_size,
@@ -67,7 +67,7 @@ try:
 except OSError:
     pass
 
-# Load model
+# Load model.
 classifier = PointNetCls(k=num_classes, num_points=opt.num_points)
 
 if opt.model_path != "":
@@ -77,17 +77,19 @@ optimizer = torch.optim.SGD(classifier.parameters(), lr=0.01, momentum=0.9)
 if torch.cuda.is_available():
     classifier.cuda()
 
+# Train model.
 num_batch = len(train_dataset) / opt.batch_size
 
 for epoch in range(opt.num_epoch):
     classifier = classifier.train()
     for i, data in enumerate(train_dataloader, 0):
+        optimizer.zero_grad()
+
         points, target = data
         target = target[:, 0]
         points = points.transpose(2, 1)
         if torch.cuda.is_available():
             points, target = points.cuda(), target.cuda()
-        optimizer.zero_grad()
         pred, _, trans_feat = classifier(points)
         loss = F.nll_loss(pred, target)
         if opt.feature_transform:
@@ -100,18 +102,19 @@ for epoch in range(opt.num_epoch):
             epoch, i, num_batch, loss.item(), correct.item() / float(opt.batch_size)))
 
         if i % 10 == 0:
-            j, data = next(enumerate(test_dataloader, 0))
-            points, target = data
-            target = target[:, 0]
-            points = points.transpose(2, 1)
-            if torch.cuda.is_available():
-                points, target = points.cuda(), target.cuda()
-            classifier = classifier.eval()
-            pred, _, _ = classifier(points)
-            loss = F.nll_loss(pred, target)
-            pred_choice = pred.detach().max(1)[1]
-            correct = pred_choice.eq(target.detach()).cpu().sum()
-            print("[%d: %d/%d] %s loss: %f accuracy: %f" % (
-                epoch, i, num_batch, "test", loss.item(), correct.item() / float(opt.batch_size)))
+            with torch.no_grad():
+                classifier = classifier.eval()
+                j, data = next(enumerate(test_dataloader, 0))
+                points, target = data
+                target = target[:, 0]
+                points = points.transpose(2, 1)
+                if torch.cuda.is_available():
+                    points, target = points.cuda(), target.cuda()
+                pred, _, _ = classifier(points)
+                loss = F.nll_loss(pred, target)
+                pred_choice = pred.detach().max(1)[1]
+                correct = pred_choice.eq(target.detach()).cpu().sum()
+                print("[%d: %d/%d] %s loss: %f accuracy: %f" % (
+                    epoch, i, num_batch, "test", loss.item(), correct.item() / float(opt.batch_size)))
 
     torch.save(classifier.state_dict(), "%s/cls_model_%d.pth" % (opt.out_folder, epoch))

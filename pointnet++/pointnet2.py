@@ -1,22 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from time import time
 
 
 def timeit(tag, t):
     print("{}: {}s".format(tag, time() - t))
     return time()
-
-
-def pc_normalize(pc):
-    l = pc.shape[0]
-    centroid = np.mean(pc, axis=0)
-    pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
-    pc = pc / m
-    return pc
 
 
 def square_distance(src, dst):
