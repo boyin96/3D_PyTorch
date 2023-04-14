@@ -8,7 +8,7 @@ from datasets import MyDataset
 from pointnet import PointNetCls, feature_transform_regularizer
 
 # Set parameters.
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser("training")
 parser.add_argument("--batch_size", type=int, default=32, help="input batch size")
 parser.add_argument("--num_points", type=int, default=2500, help="input points size")
 parser.add_argument("--workers", type=int, default=0, help="number of data loading workers")
@@ -67,6 +67,7 @@ try:
 except OSError:
     pass
 
+# Load model
 classifier = PointNetCls(k=num_classes, num_points=opt.num_points)
 
 if opt.model_path != "":
@@ -79,6 +80,7 @@ if torch.cuda.is_available():
 num_batch = len(train_dataset) / opt.batch_size
 
 for epoch in range(opt.num_epoch):
+    classifier = classifier.train()
     for i, data in enumerate(train_dataloader, 0):
         points, target = data
         target = target[:, 0]
@@ -86,7 +88,6 @@ for epoch in range(opt.num_epoch):
         if torch.cuda.is_available():
             points, target = points.cuda(), target.cuda()
         optimizer.zero_grad()
-        classifier = classifier.train()
         pred, _, trans_feat = classifier(points)
         loss = F.nll_loss(pred, target)
         if opt.feature_transform:
