@@ -4,11 +4,6 @@ import torch.nn.functional as F
 from time import time
 
 
-def timeit(tag, t):
-    print("{}: {}s".format(tag, time() - t))
-    return time()
-
-
 def square_distance(src, dst):
     """
     Calculate Euclid distance between each two points.
