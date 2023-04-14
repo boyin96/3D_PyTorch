@@ -19,6 +19,7 @@ parser.add_argument("--dataset_path", type=str, default="shapenetcore_partanno_s
                     help="dataset path")
 parser.add_argument("--dataset_type", type=str, default="prediction", help="dataset type")
 parser.add_argument("--feature_transform_regular", type=bool, default=False, help="use feature transform")
+parser.add_argument("--optimizer", type=str, default="Adam", help="optimizer for training")
 opt = parser.parse_args()
 
 # Set CPU seed.
@@ -68,12 +69,23 @@ except OSError:
     pass
 
 # Load model.
-classifier = PointNetCls(k=num_classes, num_points=opt.num_points)
+classifier = PointNetCls(classes=num_classes, num_points=opt.num_points)
 
 if opt.model_path != "":
     classifier.load_state_dict(torch.load(opt.model_path))
 
-optimizer = torch.optim.SGD(classifier.parameters(), lr=0.01, momentum=0.9)
+if opt.optimizer == "Adam":
+    optimizer = torch.optim.Adam(
+        classifier.parameters(),
+        lr=0.001,
+        betas=(0.9, 0.999),
+        eps=1e-08,
+        weight_decay=1e-4
+    )
+else:
+    optimizer = torch.optim.SGD(classifier.parameters(), lr=0.01, momentum=0.9)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.7)
+
 if torch.cuda.is_available():
     classifier.cuda()
 
@@ -82,6 +94,7 @@ num_batch = len(train_dataset) / opt.batch_size
 
 for epoch in range(opt.num_epoch):
     classifier = classifier.train()
+    scheduler.step()
     for i, data in enumerate(train_dataloader, 0):
         optimizer.zero_grad()
 
