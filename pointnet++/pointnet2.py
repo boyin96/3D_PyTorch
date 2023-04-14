@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from time import time
 
 
 def square_distance(src, dst):
