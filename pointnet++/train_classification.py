@@ -10,7 +10,7 @@ from pointnet2 import PointNetClsSSG
 
 # Set parameters.
 parser = argparse.ArgumentParser("training")
-parser.add_argument("--batch_size", type=int, default=24, help="input batch size")
+parser.add_argument("--batch_size", type=int, default=32, help="input batch size")
 parser.add_argument("--num_points", type=int, default=2500, help="input points size")
 parser.add_argument("--workers", type=int, default=0, help="number of data loading workers")
 parser.add_argument("--num_epoch", type=int, default=200, help="number of epochs to train")
@@ -98,7 +98,7 @@ for epoch in range(opt.num_epoch):
 
         if torch.cuda.is_available():
             points, target = points.cuda(), target.cuda()
-        pred, _, trans_feat = classifier(points)
+        pred, _ = classifier(points)
         loss = F.nll_loss(pred, target)
         loss.backward()
         optimizer.step()
@@ -116,7 +116,7 @@ for epoch in range(opt.num_epoch):
                 points = points.transpose(2, 1)
                 if torch.cuda.is_available():
                     points, target = points.cuda(), target.cuda()
-                pred, _, _ = classifier(points)
+                pred, _ = classifier(points)
                 loss = F.nll_loss(pred, target)
                 pred_choice = pred.detach().max(1)[1]
                 correct = pred_choice.eq(target.detach()).cpu().sum()
