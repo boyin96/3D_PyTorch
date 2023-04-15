@@ -16,11 +16,12 @@ parser.add_argument("--workers", type=int, default=0, help="number of data loadi
 parser.add_argument("--num_epoch", type=int, default=200, help="number of epochs to train")
 parser.add_argument("--out_folder", type=str, default="cls", help="output folder")
 parser.add_argument("--model_path", type=str, default="", help="model path")
-parser.add_argument("--use_normals", type=bool, default=True, help="use normals")
+parser.add_argument("--use_normals", type=bool, default=False, help="use normals (extra features)")
 parser.add_argument("--dataset_path", type=str, default="shapenetcore_partanno_segmentation_benchmark_v0",
                     help="dataset path")
 parser.add_argument("--dataset_type", type=str, default="prediction", help="dataset type")
 parser.add_argument("--feature_transform_regular", type=bool, default=False, help="use feature transform")
+parser.add_argument("--optimizer", type=str, default="Adam", help="optimizer for training")
 opt = parser.parse_args()
 
 # Set CPU seed.
@@ -35,7 +36,7 @@ if opt.dataset_type == "prediction":
         classification=True,
         train=True,
         npoints=opt.num_points,
-        data_aug=True
+        data_aug=False
     )
     test_dataset = MyDataset(
         root=opt.dataset_path,
@@ -75,7 +76,18 @@ classifier = PointNetClsSSG(num_classes, normal_channel=opt.use_normals)
 if opt.model_path != "":
     classifier.load_state_dict(torch.load(opt.model_path))
 
-optimizer = torch.optim.SGD(classifier.parameters(), lr=0.01, momentum=0.9)
+if opt.optimizer == "Adam":
+    optimizer = torch.optim.Adam(
+        classifier.parameters(),
+        lr=0.001,
+        betas=(0.9, 0.999),
+        eps=1e-08,
+        weight_decay=1e-4
+    )
+else:
+    optimizer = torch.optim.SGD(classifier.parameters(), lr=0.01, momentum=0.9)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.7)
+
 if torch.cuda.is_available():
     classifier.cuda()
 
@@ -84,16 +96,22 @@ num_batch = len(train_dataset) / opt.batch_size
 
 for epoch in range(opt.num_epoch):
     classifier = classifier.train()
+    scheduler.step()
     for i, data in enumerate(train_dataloader, 0):
         optimizer.zero_grad()
 
         points, target = data
         target = target[:, 0]
+
+        # Data augmentation.
+        # Original points data with shape [Batch, npoints, 3]
         points = points.detach().numpy()
         points = ut.random_point_dropout(points)
         points[:, :, 0:3] = ut.random_scale_point_cloud(points[:, :, 0:3])
         points[:, :, 0:3] = ut.shift_point_cloud(points[:, :, 0:3])
-        points = torch.from_numpy(points)
+        points = torch.from_numpy(points).to(torch.float32)
+
+        # Input points data with shape [Batch, 3, npoints]
         points = points.transpose(2, 1)
 
         if torch.cuda.is_available():

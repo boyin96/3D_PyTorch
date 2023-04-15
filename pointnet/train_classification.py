@@ -98,9 +98,13 @@ for epoch in range(opt.num_epoch):
     for i, data in enumerate(train_dataloader, 0):
         optimizer.zero_grad()
 
+        # Original points data with shape [Batch, npoints, 3]
         points, target = data
         target = target[:, 0]
+
+        # Input points data with shape [Batch, 3, npoints]
         points = points.transpose(2, 1)
+
         if torch.cuda.is_available():
             points, target = points.cuda(), target.cuda()
         pred, _, trans_feat = classifier(points)
