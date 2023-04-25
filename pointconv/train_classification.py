@@ -4,8 +4,9 @@ import random
 import torch.nn.functional as F
 import torch.utils.data
 
+import utilities as ut
 from datasets import MyDataset
-from pointnet import PointNetCls, feature_transform_regularizer
+from pointcnn import PointConvClsSsg
 
 # Set parameters.
 parser = argparse.ArgumentParser("training")
@@ -71,7 +72,7 @@ except OSError:
     pass
 
 # Load model.
-classifier = PointNetCls(classes=num_classes, num_points=opt.num_points)
+classifier = PointConvClsSsg(classes=num_classes, num_points=opt.num_points)
 
 if opt.model_path != "":
     classifier.load_state_dict(torch.load(opt.model_path))
@@ -100,19 +101,24 @@ for epoch in range(opt.num_epoch):
     for i, data in enumerate(train_dataloader, 0):
         optimizer.zero_grad()
 
-        # Original points data with shape [Batch, npoints, 3]
         points, target = data
         target = target[:, 0]
+
+        # Data augmentation.
+        # Original points data with shape [Batch, npoints, 3]
+        points = points.detach().numpy()
+        points = ut.random_point_dropout(points)
+        points[:, :, 0:3] = ut.random_scale_point_cloud(points[:, :, 0:3])
+        points[:, :, 0:3] = ut.shift_point_cloud(points[:, :, 0:3])
+        points = torch.from_numpy(points).to(torch.float32)
 
         # Input points data with shape [Batch, 3, npoints]
         points = points.transpose(2, 1)
 
         if torch.cuda.is_available():
             points, target = points.cuda(), target.cuda()
-        pred, _, trans_feat = classifier(points)
+        pred = classifier(points[:, :3, :], points[:, 3:, :])
         loss = F.nll_loss(pred, target)
-        if opt.feature_transform:
-            loss = loss + feature_transform_regularizer(trans_feat) * 0.001
         loss.backward()
         optimizer.step()
         pred_choice = pred.detach().max(1)[1]
@@ -129,7 +135,7 @@ for epoch in range(opt.num_epoch):
                 points = points.transpose(2, 1)
                 if torch.cuda.is_available():
                     points, target = points.cuda(), target.cuda()
-                pred, _, _ = classifier(points)
+                pred = classifier(points[:, :3, :], points[:, 3:, :])
                 loss = F.nll_loss(pred, target)
                 pred_choice = pred.detach().max(1)[1]
                 correct = pred_choice.eq(target.detach()).cpu().sum()

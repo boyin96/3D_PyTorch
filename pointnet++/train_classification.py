@@ -24,10 +24,12 @@ parser.add_argument("--feature_transform_regular", type=bool, default=False, hel
 parser.add_argument("--optimizer", type=str, default="Adam", help="optimizer for training")
 opt = parser.parse_args()
 
-# Set CPU seed.
+# Set CPU/GPU seed.
 opt.manualSeed = random.randint(1, 10000)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
+torch.cuda.manual_seed(opt.manualSeed)
+torch.cuda.manual_seed_all(opt.manualSeed)
 
 # Set dataset.
 if opt.dataset_type == "prediction":
