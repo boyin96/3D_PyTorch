@@ -1,47 +1,120 @@
 import torch
 import torch.nn as nn
-from torch import FloatTensor
+import torch.nn.functional as F
 import numpy as np
-from typing import Tuple, Callable, Optional
 
-# Internal Modules
-from util_funcs import UFloatTensor, ULongTensor
-from util_layers import Conv, SepConv, Dense, EndChannels
+from sklearn.neighbors import NearestNeighbors
+
+
+def knn_indices_func_cpu(rep_pts, pts, K, D):
+    rep_pts = rep_pts.data.numpy()
+    pts = pts.data.numpy()
+    region_idx = []
+
+    for n, p in enumerate(rep_pts):
+        P_particular = pts[n]
+        nbrs = NearestNeighbors(n_neighbors=D * K + 1, algorithm="ball_tree").fit(P_particular)
+        indices = nbrs.kneighbors(p)[1]
+        region_idx.append(indices[:, 1::D])
+
+    region_idx = torch.from_numpy(np.stack(region_idx, axis=0))
+    return region_idx
+
+
+def knn_indices_func_gpu(rep_pts, pts, k):
+    region_idx = []
+
+    for n, qry in enumerate(rep_pts):
+        ref = pts[n]
+        n, d = ref.size()
+        m, d = qry.size()
+        mref = ref.expand(m, n, d)
+        mqry = qry.expand(n, m, d).transpose(0, 1)
+        dist2 = torch.sum((mqry - mref) ** 2, 2).squeeze()
+        _, inds = torch.topk(dist2, k * d + 1, dim=1, largest=False)
+        region_idx.append(inds[:, 1::d])
+
+    region_idx = torch.stack(region_idx, dim=0)
+    return region_idx
+
+
+def EndChannels(f):
+    class WrappedLayer(nn.Module):
+        def __init__(self):
+            super(WrappedLayer, self).__init__()
+
+            self.f = f
+
+        def forward(self, x):
+            x = x.permute(0, 3, 1, 2)
+            x = self.f(x)
+            x = x.permute(0, 2, 3, 1)
+            return x
+
+    return WrappedLayer()
+
+
+class Dense(nn.Module):
+    def __init__(self, in_features, out_features, drop_rate=0.0, activation=True):
+        super(Dense, self).__init__()
+
+        self.linear = nn.Linear(in_features, out_features)
+        self.activation = activation
+        self.drop = nn.Dropout(drop_rate) if drop_rate > 0.0 else None
+
+    def forward(self, x):
+        x = self.linear(x)
+        if self.activation:
+            x = nn.ReLU(x)
+        if self.drop:
+            x = self.drop(x)
+        return x
+
+
+class Conv(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, with_bn=True, activation=True):
+        super(Conv, self).__init__()
+
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, bias=not with_bn)
+        self.activation = activation
+        self.bn = nn.BatchNorm2d(out_channels, momentum=0.9) if with_bn else None
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.activation:
+            x = nn.ReLU(x)
+        if self.bn:
+            x = self.bn(x)
+        return x
+
+
+class SepConv(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, depth_multiplier=1, with_bn=True, activation=True):
+        super(SepConv, self).__init__()
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels * depth_multiplier, kernel_size, groups=in_channels),
+            nn.Conv2d(in_channels * depth_multiplier, out_channels, 1, bias=not with_bn)
+        )
+        self.activation = activation
+        self.bn = nn.BatchNorm2d(out_channels, momentum=0.9) if with_bn else None
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.activation:
+            x = nn.ReLU(x)
+        if self.bn:
+            x = self.bn(x)
+        return x
 
 
 class XConv(nn.Module):
-    """ Convolution over a single point and its neighbors.  """
-
-    def __init__(self, C_in: int, C_out: int, dims: int, K: int,
-                 P: int, C_mid: int, depth_multiplier: int) -> None:
-        """
-        :param C_in: Input dimension of the points' features.
-        :param C_out: Output dimension of the representative point features.
-        :param dims: Spatial dimensionality of points.
-        :param K: Number of neighbors to convolve over.
-        :param P: Number of representative points.
-        :param C_mid: Dimensionality of lifted point features.
-        :param depth_multiplier: Depth multiplier for internal depthwise separable convolution.
-        """
+    def __init__(self, C_in, C_out, dims, K, P, C_mid, depth_multiplier):
         super(XConv, self).__init__()
 
-        if __debug__:
-            # Only needed for assertions.
-            self.C_in = C_in
-            self.C_mid = C_mid
-            self.dims = dims
-            self.K = K
-
         self.P = P
-
-        # Additional processing layers
-        # self.pts_layernorm = LayerNorm(2, momentum = 0.9)
-
-        # Main dense linear layers
         self.dense1 = Dense(dims, C_mid)
         self.dense2 = Dense(C_mid, C_mid)
-
-        # Layers to generate X
         self.x_trans = nn.Sequential(
             EndChannels(Conv(
                 in_channels=dims,
@@ -49,51 +122,22 @@ class XConv(nn.Module):
                 kernel_size=(1, K),
                 with_bn=False
             )),
-            Dense(K * K, K * K, with_bn=False),
-            Dense(K * K, K * K, with_bn=False, activation=None)
+            Dense(K * K, K * K),
+            Dense(K * K, K * K, activation=False)
         )
-
         self.end_conv = EndChannels(SepConv(
             in_channels=C_mid + C_in,
             out_channels=C_out,
             kernel_size=(1, K),
             depth_multiplier=depth_multiplier
-        )).cuda()
+        ))
 
-    def forward(self, x: Tuple[UFloatTensor,  # (N, P, dims)
-    UFloatTensor,  # (N, P, K, dims)
-    Optional[UFloatTensor]]  # (N, P, K, C_in)
-                ) -> UFloatTensor:  # (N, K, C_out)
-        """
-        Applies XConv to the input data.
-        :param x: (rep_pt, pts, fts) where
-          - rep_pt: Representative point.
-          - pts: Regional point cloud such that fts[:,p_idx,:] is the feature
-          associated with pts[:,p_idx,:].
-          - fts: Regional features such that pts[:,p_idx,:] is the feature
-          associated with fts[:,p_idx,:].
-        :return: Features aggregated into point rep_pt.
-        """
+    def forward(self, x):
         rep_pt, pts, fts = x
-
-        if fts is not None:
-            assert (rep_pt.size()[0] == pts.size()[0] == fts.size()[0])  # Check N is equal.
-            assert (rep_pt.size()[1] == pts.size()[1] == fts.size()[1])  # Check P is equal.
-            assert (pts.size()[2] == fts.size()[2] == self.K)  # Check K is equal.
-            assert (fts.size()[3] == self.C_in)  # Check C_in is equal.
-        else:
-            assert (rep_pt.size()[0] == pts.size()[0])  # Check N is equal.
-            assert (rep_pt.size()[1] == pts.size()[1])  # Check P is equal.
-            assert (pts.size()[2] == self.K)  # Check K is equal.
-        assert (rep_pt.size()[2] == pts.size()[3] == self.dims)  # Check dims is equal.
-
         N = len(pts)
         P = rep_pt.size()[1]  # (N, P, K, dims)
         p_center = torch.unsqueeze(rep_pt, dim=2)  # (N, P, 1, dims)
-
-        # Move pts to local coordinate system of rep_pt.
         pts_local = pts - p_center  # (N, P, K, dims)
-        # pts_local = self.pts_layernorm(pts - p_center)
 
         # Individually lift each point into C_mid space.
         fts_lifted0 = self.dense1(pts_local)
@@ -116,32 +160,7 @@ class XConv(nn.Module):
 
 
 class PointCNN(nn.Module):
-    """ Pointwise convolutional model. """
-
-    def __init__(self, C_in: int, C_out: int, dims: int, K: int, D: int, P: int,
-                 r_indices_func: Callable[[UFloatTensor,  # (N, P, dims)
-                                           UFloatTensor,  # (N, x, dims)
-                                           int, int],
-                 ULongTensor]  # (N, P, K)
-                 ) -> None:
-        """
-        :param C_in: Input dimension of the points' features.
-        :param C_out: Output dimension of the representative point features.
-        :param dims: Spatial dimensionality of points.
-        :param K: Number of neighbors to convolve over.
-        :param D: "Spread" of neighboring points.
-        :param P: Number of representative points.
-        :param r_indices_func: Selector function of the type,
-          INPUTS
-          rep_pts : Representative points.
-          pts  : Point cloud.
-          K : Number of points for each region.
-          D : "Spread" of neighboring points.
-
-          OUTPUT
-          pts_idx : Array of indices into pts such that pts[pts_idx] is the set
-          of points in the "region" around rep_pt.
-        """
+    def __init__(self, C_in, C_out, dims, K, D, P, r_indices_func):
         super(PointCNN, self).__init__()
 
         C_mid = C_out // 2 if C_in == 0 else C_out // 4
@@ -156,42 +175,19 @@ class PointCNN(nn.Module):
         self.x_conv = XConv(C_out // 2 if C_in != 0 else C_in, C_out, dims, K, P, C_mid, depth_multiplier)
         self.D = D
 
-    def select_region(self, pts: UFloatTensor,  # (N, x, dims)
-                      pts_idx: ULongTensor  # (N, P, K)
-                      ) -> UFloatTensor:  # (P, K, dims)
-        """
-        Selects neighborhood points based on output of r_indices_func.
-        :param pts: Point cloud to select regional points from.
-        :param pts_idx: Indices of points in region to be selected.
-        :return: Local neighborhoods around each representative point.
-        """
+    @staticmethod
+    def select_region(pts, pts_idx):
         regions = torch.stack([
             pts[n][idx, :] for n, idx in enumerate(torch.unbind(pts_idx, dim=0))
         ], dim=0)
         return regions
 
-    def forward(self, x: Tuple[FloatTensor,  # (N, P, dims)
-    FloatTensor,  # (N, x, dims)
-    FloatTensor]  # (N, x, C_in)
-                ) -> FloatTensor:  # (N, P, C_out)
-        """
-        Given a set of representative points, a point cloud, and its
-        corresponding features, return a new set of representative points with
-        features projected from the point cloud.
-        :param x: (rep_pts, pts, fts) where
-          - rep_pts: Representative points.
-          - pts: Regional point cloud such that fts[:,p_idx,:] is the
-          feature associated with pts[:,p_idx,:].
-          - fts: Regional features such that pts[:,p_idx,:] is the feature
-          associated with fts[:,p_idx,:].
-        :return: Features aggregated to rep_pts.
-        """
+    def forward(self, x):
         rep_pts, pts, fts = x
         fts = self.dense(fts) if fts is not None else fts
 
         # This step takes ~97% of the time. Prime target for optimization: KNN on GPU.
-        pts_idx = self.r_indices_func(rep_pts.cpu(), pts.cpu()).cuda()
-        # -------------------------------------------------------------------------- #
+        pts_idx = self.r_indices_func(rep_pts.cpu(), pts.cpu())
 
         pts_regional = self.select_region(pts, pts_idx)
         fts_regional = self.select_region(fts, pts_idx) if fts is not None else fts
@@ -201,34 +197,14 @@ class PointCNN(nn.Module):
 
 
 class RandPointCNN(nn.Module):
-    """ PointCNN with randomly subsampled representative points. """
-
     def __init__(self, C_in: int, C_out: int, dims: int, K: int, D: int, P: int,
-                 r_indices_func: Callable[[UFloatTensor,  # (N, P, dims)
-                                           UFloatTensor,  # (N, x, dims)
-                                           int, int],
-                 ULongTensor]  # (N, P, K)
-                 ) -> None:
-        """ See documentation for PointCNN. """
+                 r_indices_func):
+
         super(RandPointCNN, self).__init__()
         self.pointcnn = PointCNN(C_in, C_out, dims, K, D, P, r_indices_func)
         self.P = P
 
-    def forward(self, x: Tuple[UFloatTensor,  # (N, x, dims)
-    UFloatTensor]  # (N, x, dims)
-                ) -> Tuple[UFloatTensor,  # (N, P, dims)
-    UFloatTensor]:  # (N, P, C_out)
-        """
-        Given a point cloud, and its corresponding features, return a new set
-        of randomly-sampled representative points with features projected from
-        the point cloud.
-        :param x: (pts, fts) where
-         - pts: Regional point cloud such that fts[:,p_idx,:] is the
-        feature associated with pts[:,p_idx,:].
-         - fts: Regional features such that pts[:,p_idx,:] is the feature
-        associated with fts[:,p_idx,:].
-        :return: Randomly subsampled points and their features.
-        """
+    def forward(self, x):
         pts, fts = x
         if 0 < self.P < pts.size()[1]:
             # Select random set of indices of subsampled points.
@@ -239,3 +215,27 @@ class RandPointCNN(nn.Module):
             rep_pts = pts
         rep_pts_fts = self.pointcnn((rep_pts, pts, fts))
         return rep_pts, rep_pts_fts
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+
+        self.pcnn1 = RandPointCNN(3, 32, 3, 8, 1, -1, knn_indices_func_cpu)
+        self.pcnn2 = nn.Sequential(
+            RandPointCNN(32, 64, 3, 8, 2, -1, knn_indices_func_cpu),
+            RandPointCNN(64, 96, 3, 8, 4, -1, knn_indices_func_cpu),
+            RandPointCNN(96, 128, 3, 12, 4, 120, knn_indices_func_cpu),
+            RandPointCNN(128, 160, 3, 12, 6, 120, knn_indices_func_cpu)
+        )
+        self.fcn = nn.Sequential(
+            Dense(160, 128),
+            Dense(128, 64, drop_rate=0.5),
+            Dense(64, 10, activation=False)
+        )
+
+    def forward(self, x):
+        x = self.pcnn1(x)
+        x = self.pcnn2(x)[1]
+        x = self.fcn(x)
+        return F.log_softmax(x, dim=-1)

@@ -6,7 +6,7 @@ import torch.utils.data
 
 import utilities as ut
 from datasets import MyDataset
-from pointcnn import PointConvClsSsg
+from pointcnn import Net
 
 # Set parameters.
 parser = argparse.ArgumentParser("training")
@@ -72,7 +72,7 @@ except OSError:
     pass
 
 # Load model.
-classifier = PointConvClsSsg(classes=num_classes, num_points=opt.num_points)
+classifier = Net()
 
 if opt.model_path != "":
     classifier.load_state_dict(torch.load(opt.model_path))
@@ -117,7 +117,7 @@ for epoch in range(opt.num_epoch):
 
         if torch.cuda.is_available():
             points, target = points.cuda(), target.cuda()
-        pred = classifier(points[:, :3, :], points[:, 3:, :])
+        pred = classifier((points, points))
         loss = F.nll_loss(pred, target)
         loss.backward()
         optimizer.step()
