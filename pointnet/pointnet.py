@@ -215,9 +215,9 @@ if __name__ == '__main__':
     # print("stn64d: ", out.size())
     # # print('loss', feature_transform_regularizer(out))
 
-    # pointfea = PointNetfeat(global_feat=True)
-    # out, _, _ = pointfea(sim_data)
-    # print("global feat: ", out.size())
+    pointfea = PointNetfeat(global_feat=True)
+    out, _, _ = pointfea(sim_data)
+    print("global feat: ", out.size())
     #
     # pointfea = PointNetfeat(global_feat=False)
     # out, _, _ = pointfea(sim_data)

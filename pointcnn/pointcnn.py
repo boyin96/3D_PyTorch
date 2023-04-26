@@ -201,8 +201,7 @@ class PointCNN(nn.Module):
 
 
 class RandPointCNN(nn.Module):
-    def __init__(self, C_in: int, C_out: int, dims: int, K: int, D: int, P: int,
-                 r_indices_func):
+    def __init__(self, C_in, C_out, dims, K, D, P, r_indices_func):
 
         super(RandPointCNN, self).__init__()
         self.pointcnn = PointCNN(C_in, C_out, dims, K, D, P, r_indices_func)
@@ -241,7 +240,9 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.pcnn1(x)
         x = self.pcnn2(x)[1]
+        print(x.size())
         x = self.fcn(x)
+        print(x.size())
         return torch.mean(x, dim=1)
 
 
