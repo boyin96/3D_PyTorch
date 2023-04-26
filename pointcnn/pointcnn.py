@@ -7,8 +7,8 @@ from sklearn.neighbors import NearestNeighbors
 
 
 def knn_indices_func_cpu(rep_pts, pts, K, D):
-    rep_pts = rep_pts.data.numpy()
-    pts = pts.data.numpy()
+    rep_pts = rep_pts.detach().numpy()
+    pts = pts.detach().numpy()
     region_idx = []
 
     for n, p in enumerate(rep_pts):
@@ -17,7 +17,7 @@ def knn_indices_func_cpu(rep_pts, pts, K, D):
         indices = nbrs.kneighbors(p)[1]
         region_idx.append(indices[:, 1::D])
 
-    region_idx = torch.from_numpy(np.stack(region_idx, axis=0))
+    region_idx = torch.from_numpy(np.stack(region_idx, axis=0)).to(torch.int64)
     return region_idx
 
 
@@ -168,7 +168,6 @@ class PointCNN(nn.Module):
         super(PointCNN, self).__init__()
 
         C_mid = C_out // 2 if C_in == 0 else C_out // 4
-
         if C_in == 0:
             depth_multiplier = 1
         else:
@@ -189,10 +188,7 @@ class PointCNN(nn.Module):
     def forward(self, x):
         rep_pts, pts, fts = x
         fts = self.dense(fts) if fts is not None else fts
-
-        # This step takes ~97% of the time. Prime target for optimization: KNN on GPU.
         pts_idx = self.r_indices_func(rep_pts.cpu(), pts.cpu())
-
         pts_regional = self.select_region(pts, pts_idx)
         fts_regional = self.select_region(fts, pts_idx) if fts is not None else fts
         fts_p = self.x_conv((rep_pts, pts_regional, fts_regional))
@@ -202,19 +198,17 @@ class PointCNN(nn.Module):
 
 class RandPointCNN(nn.Module):
     def __init__(self, C_in, C_out, dims, K, D, P, r_indices_func):
-
         super(RandPointCNN, self).__init__()
+
         self.pointcnn = PointCNN(C_in, C_out, dims, K, D, P, r_indices_func)
         self.P = P
 
     def forward(self, x):
         pts, fts = x
         if 0 < self.P < pts.size()[1]:
-            # Select random set of indices of subsampled points.
             idx = np.random.choice(pts.size()[1], self.P, replace=False).tolist()
             rep_pts = pts[:, idx, :]
         else:
-            # All input points are representative points.
             rep_pts = pts
         rep_pts_fts = self.pointcnn((rep_pts, pts, fts))
         return rep_pts, rep_pts_fts
@@ -240,9 +234,7 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.pcnn1(x)
         x = self.pcnn2(x)[1]
-        print(x.size())
         x = self.fcn(x)
-        print(x.size())
         return torch.mean(x, dim=1)
 
 
