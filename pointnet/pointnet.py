@@ -200,7 +200,7 @@ def feature_transform_regularizer(trans):
     return loss
 
 
-# Test point network
+# Test point network.
 if __name__ == '__main__':
     sim_data = torch.rand(32, 3, 2500)
     sim_data_64d = torch.rand(32, 64, 2500)

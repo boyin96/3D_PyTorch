@@ -65,7 +65,7 @@ class Dense(nn.Module):
     def forward(self, x):
         x = self.linear(x)
         if self.activation:
-            x = nn.ReLU(x)
+            x = F.relu(x)
         if self.drop:
             x = self.drop(x)
         return x
@@ -82,7 +82,7 @@ class Conv(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         if self.activation:
-            x = nn.ReLU(x)
+            x = F.relu(x)
         if self.bn:
             x = self.bn(x)
         return x
@@ -102,7 +102,7 @@ class SepConv(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         if self.activation:
-            x = nn.ReLU(x)
+            x = F.relu(x)
         if self.bn:
             x = self.bn(x)
         return x
@@ -112,6 +112,10 @@ class XConv(nn.Module):
     def __init__(self, C_in, C_out, dims, K, P, C_mid, depth_multiplier):
         super(XConv, self).__init__()
 
+        self.C_in = C_in
+        self.C_mid = C_mid
+        self.dims = dims
+        self.K = K
         self.P = P
         self.dense1 = Dense(dims, C_mid)
         self.dense2 = Dense(C_mid, C_mid)
@@ -238,4 +242,31 @@ class Net(nn.Module):
         x = self.pcnn1(x)
         x = self.pcnn2(x)[1]
         x = self.fcn(x)
-        return F.log_softmax(x, dim=-1)
+        return torch.mean(x, dim=1)
+
+
+# Test pointcnn network.
+if __name__ == '__main__':
+    sim_data = torch.rand(32, 2500, 3)
+
+    net = Net()
+    out = net((sim_data, sim_data))
+    print(out.size())
+
+    # tran = STN3d()
+    # out = tran(sim_data)
+    # print("stn: ", out.size())
+    # # print('loss', feature_transform_regularizer(out))
+
+    # tran = STNkd(k=64)
+    # out = tran(sim_data_64d)
+    # print("stn64d: ", out.size())
+    # # print('loss', feature_transform_regularizer(out))
+
+    # pointfea = PointNetfeat(global_feat=True)
+    # out, _, _ = pointfea(sim_data)
+    # print("global feat: ", out.size())
+    #
+    # pointfea = PointNetfeat(global_feat=False)
+    # out, _, _ = pointfea(sim_data)
+    # print("point feat: ", out.size())
