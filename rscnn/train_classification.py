@@ -6,7 +6,7 @@ import torch.utils.data
 
 import utilities as ut
 from datasets import MyDataset
-from pointcnn import Net
+from rscnn import Net
 
 # Set parameters.
 parser = argparse.ArgumentParser("training")
@@ -112,9 +112,12 @@ for epoch in range(opt.num_epoch):
         points[:, :, 0:3] = ut.shift_point_cloud(points[:, :, 0:3])
         points = torch.from_numpy(points).to(torch.float32)
 
+        # Input points data with shape [Batch, 3, npoints]
+        points = points.transpose(2, 1)
+
         if torch.cuda.is_available():
             points, target = points.cuda(), target.cuda()
-        pred = classifier((points, points))
+        pred = classifier(points)
         loss = F.nll_loss(pred, target)
         loss.backward()
         optimizer.step()

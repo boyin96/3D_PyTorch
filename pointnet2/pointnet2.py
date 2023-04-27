@@ -243,7 +243,10 @@ class PointNetClsSSG(nn.Module):
 
 # Test point++ network.
 if __name__ == '__main__':
-    sim_data = torch.rand(32, 2500, 3)
+    sim_data = torch.rand(32, 3, 2500)
+    net = PointNetClsSSG(12, False)
+    out, _ = net(sim_data)
+    print(out.size())
     # out = farthest_point_sample(sim_data, 1000)
     # print(out.shape)
     # out = index_points(sim_data, out)
