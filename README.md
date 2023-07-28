@@ -17,9 +17,9 @@ This repo is implementation for 3D point cloud architectures in pytorch.
 ## Point Cloud Papers
 
 * [2017 CVPR] PointNet: Deep Learning on Point Sets for 3D Classification and
-  Segmentation [Paper](https://arxiv.org/pdf/1612.00593) [Original](https://github.com/charlesq34/pointnet) [Pytorch](https://github.com/fxia22/pointnet.pytorch)
+  Segmentation [Paper](https://arxiv.org/pdf/1612.00593) [Original](https://github.com/charlesq34/pointnet) [PyTorch](https://github.com/fxia22/pointnet.pytorch)
 * [2017 NIPS] PointNet++: Deep Hierarchical Feature Learning on Point Sets in a Metric
-  Space [Paper](https://arxiv.org/pdf/1706.02413.pdf) [Original](https://github.com/charlesq34/pointnet2) [Pytorch](https://github.com/yanx27/Pointnet_Pointnet2_pytorch)
+  Space [Paper](https://arxiv.org/pdf/1706.02413.pdf) [Original](https://github.com/charlesq34/pointnet2) [PyTorch](https://github.com/yanx27/Pointnet_Pointnet2_pytorch)
 * [2018 NIPS] PointCNN：Convolution On X-Transformed
   Points [Paper](https://arxiv.org/pdf/1801.07791.pdf) [Code](https://github.com/yangyanli/PointCNN)
 * [2019 CVPR] DGCNN: Dynamic Graph CNN for Learning on Point
@@ -31,7 +31,7 @@ This repo is implementation for 3D point cloud architectures in pytorch.
 * [2019 CVPR] Relation-Shape Convolutional Neural Network for Point Cloud
   Analysis [Paper](https://arxiv.org/pdf/1904.07601.pdf) [Code](https://github.com/Yochengliu/Relation-Shape-CNN)
 * [2019 ICCV] KPConv: Flexible and Deformable Convolution for Point
-  Clouds [Paper](https://arxiv.org/pdf/1904.08889.pdf) [Original](https://github.com/HuguesTHOMAS/KPConv) [Pytorch](https://github.com/HuguesTHOMAS/KPConv-PyTorch)
+  Clouds [Paper](https://arxiv.org/pdf/1904.08889.pdf) [Original](https://github.com/HuguesTHOMAS/KPConv) [PyTorch](https://github.com/HuguesTHOMAS/KPConv-PyTorch)
 * [2019 NIPS] Point-Voxel CNN for Efficient 3D Deep
   Learning [Paper](https://arxiv.org/1907.03739) [Code](https://github.com/mit-han-lab/pvcnn)
 * [2020 CVM] Point Cloud Transformer [Paper](https://arxiv.org/pdf/2012.09688) [Code](https://github.com/MenghaoGuo/PCT)
