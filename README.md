@@ -31,7 +31,7 @@ This repo is implementation for 3D point cloud architectures in pytorch.
 * [2019 CVPR] Relation-Shape Convolutional Neural Network for Point Cloud
   Analysis [Paper](https://arxiv.org/pdf/1904.07601.pdf) [Code](https://github.com/Yochengliu/Relation-Shape-CNN)
 * [2019 ICCV] KPConv: Flexible and Deformable Convolution for Point
-  Clouds [Paper](https://arxiv.org/pdf/1904.08889.pdf) [Code](https://github.com/HuguesTHOMAS/KPConv)
+  Clouds [Paper](https://arxiv.org/pdf/1904.08889.pdf) [Original](https://github.com/HuguesTHOMAS/KPConv) [Pytorch](https://github.com/HuguesTHOMAS/KPConv-PyTorch)
 * [2019 NIPS] Point-Voxel CNN for Efficient 3D Deep
   Learning [Paper](https://arxiv.org/1907.03739) [Code](https://github.com/mit-han-lab/pvcnn)
 * [2020 CVM] Point Cloud Transformer [Paper](https://arxiv.org/pdf/2012.09688) [Code](https://github.com/MenghaoGuo/PCT)
